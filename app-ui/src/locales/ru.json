@@ -43,7 +43,9 @@
     "btn-cancel": "Отмена",
     "btn-finish": "Готово",
     "btn-rescan": "Переснять",
-    "btn-next": "Далее"
+    "btn-next": "Далее",
+    "btn-retry": "Повторить",
+    "btn-refresh-retry": "Обновить и повторить"
   },
 
   "files": {
@@ -160,7 +162,12 @@
     "message:no-devices": "Устройства не обнаружены",
     "message:deleted-preview": "Удалено",
     "message:turn-documents": "Повернуть",
-    "message:preview-of-page": "Предпросмотр страницы"
+    "message:preview-of-page": "Предпросмотр страницы",
+    "btn-refresh": "Устройства",
+    "message:scan-failed": "Ошибка сканирования",
+    "message:scanning": "Сканирование",
+    "message:page": "страница",
+    "message:waiting": "Пожалуйста, подождите..."
   },
 
   "settings": {

@@ -120,6 +120,16 @@ variables:
   variables, this allows you to choose an alternative delimiter.
 * `DEVICES`: Force add devices use `DEVICES` (semicolon delimited)
 * `SCANIMAGE_LIST_IGNORE`: To force ignore `scanimage -L`
+* `SCAN_TIMEOUT`: Seconds without any output from `scanimage` (image data or
+  progress) before a scan is aborted, e.g. when a network scanner is
+  unreachable. Defaults to `120`; `0` disables the timeout. After a timeout the
+  UI offers to retry, or to reload the device list and retry, without losing
+  pages already scanned in a manual batch.
+* `DEVICES_TIMEOUT`: Seconds to wait for `scanimage -L` / `scanimage -A` when
+  (re)loading devices. Defaults to `60`; `0` disables the timeout.
+* `ROUND_COORDINATES`: Crop coordinates (top, left, width, height) are rounded
+  to whole millimetres because some scanners reject fractional values. Enabled
+  by default; set to `false` to allow one decimal place.
 
 ## Mapping volumes
 

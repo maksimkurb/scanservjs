@@ -70,7 +70,13 @@ ENV \
   # This gets added to scanservjs/server/config.js:devices
   DEVICES="" \
   # Override OCR language
-  OCR_LANG=""
+  OCR_LANG="" \
+  # Seconds without scanner output before a scan is aborted (0 disables)
+  SCAN_TIMEOUT="" \
+  # Seconds to wait when listing devices (0 disables)
+  DEVICES_TIMEOUT="" \
+  # Round crop coordinates to whole millimetres (set to false to disable)
+  ROUND_COORDINATES=""
 
 # Copy entry point
 COPY entrypoint.sh /entrypoint.sh

@@ -24,6 +24,15 @@ module.exports = class Config {
       port: 8080,
       host: '::',
       timeout: 600000,
+      // Seconds without any output (data or progress) from scanimage before the
+      // scan is aborted. 0 disables the timeout
+      scanTimeout: 120,
+      // Seconds to wait for `scanimage -L` / `scanimage -A` when listing devices
+      devicesTimeout: 60,
+      // Pass `--progress` to scanimage and report progress to the UI
+      scanProgress: true,
+      // Round crop coordinates to whole millimetres in the UI
+      roundCoordinates: true,
       devices: [],
       ocrLanguage: 'eng',
       log: {
@@ -267,6 +276,24 @@ module.exports = class Config {
     // may also with to turn off the find.
     this.devicesFind = process.env.SCANIMAGE_LIST_IGNORE === undefined
       || process.env.SCANIMAGE_LIST_IGNORE.length === 0;
+
+    // Some scanners reject fractional geometry (e.g. -x 100.5). Rounding is on by
+    // default; set ROUND_COORDINATES=false to allow fractional millimetres
+    if (process.env.ROUND_COORDINATES !== undefined && process.env.ROUND_COORDINATES.length > 0) {
+      this.roundCoordinates = !['false', '0', 'no', 'off'].includes(process.env.ROUND_COORDINATES.toLowerCase());
+    }
+
+    // Abort a scan when scanimage produces no output for this many seconds
+    // (e.g. an unreachable network scanner). 0 disables
+    const scanTimeout = Number.parseInt(process.env.SCAN_TIMEOUT);
+    if (Number.isInteger(scanTimeout) && scanTimeout >= 0) {
+      this.scanTimeout = scanTimeout;
+    }
+
+    const devicesTimeout = Number.parseInt(process.env.DEVICES_TIMEOUT);
+    if (Number.isInteger(devicesTimeout) && devicesTimeout >= 0) {
+      this.devicesTimeout = devicesTimeout;
+    }
 
     // Override the OCR language here
     if (process.env.OCR_LANG !== undefined && process.env.OCR_LANG.length > 0) {

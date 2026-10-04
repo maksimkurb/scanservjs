@@ -68,6 +68,9 @@ module.exports = class Context {
     /** @type {PaperSize[]} */
     this.paperSizes = config.paperSizes;
 
+    /** @type {boolean} */
+    this.roundCoordinates = config.roundCoordinates;
+
     /** @type {string[]} */
     this.actions = userOptions.actions().map(a => a.name);
   }

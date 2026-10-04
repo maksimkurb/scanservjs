@@ -61,7 +61,7 @@
           item-title="text"
           item-value="value" />
 
-        <div class="d-flex flex-row-reverse flex-wrap">
+        <div v-if="!smAndDown" class="d-flex flex-row-reverse flex-wrap">
           <v-btn color="blue" class="ml-1 mb-1" @click="scan(1)">{{ $t('scan.btn-scan') }} <v-icon class="ml-2" :icon="mdiCamera" /></v-btn>
           <v-btn v-if="geometry" color="green" class="ml-1 mb-1" @click="createPreview">{{ $t('scan.btn-preview') }} <v-icon class="ml-2" :icon="mdiMagnify" /></v-btn>
           <v-btn color="amber" class="ml-1 mb-1" @click="deletePreview">{{ $t('scan.btn-clear') }} <v-icon class="ml-2" :icon="mdiDelete" /></v-btn>
@@ -125,6 +125,25 @@
       </v-col>
     </v-row>
 
+    <!-- Touch friendly, always visible actions on small screens -->
+    <template v-if="smAndDown">
+      <div class="action-bar-spacer" />
+      <div class="action-bar elevation-8">
+        <v-btn class="action-tile" stacked variant="text" :prepend-icon="mdiRefresh" @click="deviceRefresh">
+          {{ $t('scan.btn-refresh') }}
+        </v-btn>
+        <v-btn class="action-tile" stacked variant="text" color="amber" :prepend-icon="mdiDelete" @click="deletePreview">
+          {{ $t('scan.btn-clear') }}
+        </v-btn>
+        <v-btn v-if="geometry" class="action-tile" stacked variant="text" color="green" :prepend-icon="mdiMagnify" @click="createPreview">
+          {{ $t('scan.btn-preview') }}
+        </v-btn>
+        <v-btn class="action-tile" stacked variant="flat" color="primary" :prepend-icon="mdiCamera" @click="scan(1)">
+          {{ $t('scan.btn-scan') }}
+        </v-btn>
+      </div>
+    </template>
+
     <batch-dialog ref="batchDialog" />
   </div>
 </template>
@@ -133,6 +152,7 @@
 import { mdiCamera, mdiDelete, mdiMagnify, mdiRefresh } from '@mdi/js';
 import { Cropper } from 'vue-advanced-cropper';
 import { useI18n } from 'vue-i18n';
+import { useDisplay } from 'vuetify';
 import BatchDialog from './BatchDialog.vue';
 
 import Common from '../classes/common';
@@ -149,6 +169,35 @@ function round(n, dp) {
   return Math.round(n * f) / f;
 }
 
+/**
+ * Rounds n to dp decimal places, keeping the result within [min, max] even if
+ * the limits themselves are not round (e.g. a max width of 215.9 becomes 215)
+ */
+function roundWithin(n, min, max, dp) {
+  const f = Math.pow(10, dp || 0);
+  const lower = Math.ceil(min * f) / f;
+  const upper = Math.floor(max * f) / f;
+  return Math.min(Math.max(lower, round(n, dp)), upper);
+}
+
+/**
+ * Extracts a human readable message from whatever Common.fetch threw
+ */
+function errorMessage(error) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    try {
+      const json = JSON.parse(error);
+      return json.message || error;
+    } catch {
+      return error;
+    }
+  }
+  return JSON.stringify(error);
+}
+
 function sanitiseLocaleKey(s) {
   return s.toLowerCase().replace(/\[/g, '(').replace(/\]/g, ')');
 }
@@ -162,11 +211,13 @@ export default {
     BatchDialog
   },
 
-  emits: ['mask', 'notify'],
+  emits: ['mask', 'notify', 'progress'],
 
   setup() {
     const { te } = useI18n();
+    const { smAndDown } = useDisplay();
     return {
+      smAndDown,
       mdiCamera,
       mdiDelete,
       mdiMagnify,
@@ -186,6 +237,7 @@ export default {
           device
         ],
         paperSizes: [],
+        roundCoordinates: true,
         version: '0'
       },
       device: device,
@@ -195,11 +247,16 @@ export default {
         timer: 0,
         width: 400,
         key: 0
-      }
+      },
+      progressTimer: null
     };
   },
 
   computed: {
+    coordinateDecimals() {
+      return this.context.roundCoordinates === false ? 1 : 0;
+    },
+
     geometry() {
       return ['-x', '-y', '-l', '-t'].every(s => s in this.device.features);
     },
@@ -359,6 +416,7 @@ export default {
 
     createPreview() {
       this.mask(1);
+      this.startProgress();
 
       // Keep reloading the preview image
       const timer = window.setInterval(this.readPreview, 1000);
@@ -378,8 +436,10 @@ export default {
         // Some scanners don't create the preview until after the scan has finished.
         // Run preview one last time
         window.setTimeout(this.readPreview, 1000);
+        this.stopProgress();
         this.mask(-1);
       }).catch(() => {
+        this.stopProgress();
         this.mask(-1);
       });
     },
@@ -452,7 +512,31 @@ export default {
       this.$emit('notify', notification);
     },
 
+    /**
+     * Applies the configured rounding (whole mm by default) to the geometry
+     * so that scanners which reject fractional values work
+     */
+    roundGeometry() {
+      if (!this.geometry) {
+        return;
+      }
+      const scanner = this.deviceSize;
+      const params = this.request.params;
+      const dp = this.coordinateDecimals;
+      const fix = (key, max) => {
+        const n = Number.parseFloat(params[key]);
+        if (!Number.isNaN(n)) {
+          params[key] = roundWithin(n, 0, max, dp);
+        }
+      };
+      fix('width', scanner.width);
+      fix('height', scanner.height);
+      fix('left', scanner.width);
+      fix('top', scanner.height);
+    },
+
     onCoordinatesChange() {
+      this.roundGeometry();
       const adjusted = this.scaleCoordinates(
         this.request.params,
         this.pixelsPerMm().x,
@@ -475,7 +559,7 @@ export default {
       const scanner = this.deviceSize;
       const params = this.request.params;
       const threshold = 0.4;
-      const boundAndRound = (n, min, max) => round(Math.min(Math.max(min, n), max), 1);
+      const boundAndRound = (n, min, max) => roundWithin(n, min, max, this.coordinateDecimals);
       const bestValue = (current, crop, min, max) => Math.abs(current - crop) < threshold
         ? boundAndRound(current, min, max)
         : boundAndRound(crop, min, max);
@@ -499,6 +583,7 @@ export default {
           this.context = context;
           this.device = context.devices[0];
           this.request = this.buildRequest();
+          this.roundGeometry();
           for (let test of context.diagnostics) {
             if (!test.success) {
               this.notify({ type: 'e', message: test.message });
@@ -511,10 +596,10 @@ export default {
     },
 
     deviceRefresh() {
-      this._fetch('api/v1/context', {
+      return this._fetch('api/v1/context', {
         method: 'DELETE'
       }).then(() => {
-        this.readContext();
+        return this.readContext();
       });
     },
 
@@ -543,6 +628,30 @@ export default {
       return request;
     },
 
+    startProgress() {
+      this.stopProgress();
+      this.$emit('progress', { active: true, progress: null, page: null });
+      const timer = window.setInterval(() => {
+        Common.fetch('api/v1/scan/progress', { cache: 'no-store' })
+          .then(progress => {
+            // Ignore late responses after the scan has finished
+            if (this.progressTimer === timer) {
+              this.$emit('progress', progress);
+            }
+          })
+          .catch(() => {});
+      }, 1000);
+      this.progressTimer = timer;
+    },
+
+    stopProgress() {
+      if (this.progressTimer !== null) {
+        window.clearInterval(this.progressTimer);
+        this.progressTimer = null;
+      }
+      this.$emit('progress', null);
+    },
+
     clear() {
       storage.request = null;
       this.request = this.buildRequest();
@@ -553,8 +662,11 @@ export default {
         this.request.index = index;
       }
 
+      this.roundGeometry();
       const data = Common.clone(this.request);
-      this._fetch('api/v1/scan', {
+      this.mask(1);
+      this.startProgress();
+      Common.fetch('api/v1/scan', {
         method: 'POST',
         body: JSON.stringify(data),
         headers: {
@@ -562,38 +674,80 @@ export default {
           'Content-Type': 'application/json'
         }
       }).then((response) => {
-        if (response && 'index' in response) {
-          const options = {
-            message: this.$t('scan.message:turn-documents'),
-            onFinish: () => {
-            },
-            onNext: () => {
-              this.request.index = response.index + 1;
-              this.scan();
-            }
-          };
-          if (response.image) {
-            options.message = `${this.$t('scan.message:preview-of-page')} ${response.index}`;
-            options.image = response.image;
-            options.onFinish = () => {
-              this.request.index = -1;
-              this.scan();
-            };
-            options.onRescan = () => {
-              this.request.index = response.index;
-              this.scan();
-            };
-          }
-          this.$refs.batchDialog.open(options);
-        } else {
-          // Finish
-          if (storage.settings.showFilesAfterScan) {
-            this.$router.push('/files');
-          } else {
-            this.readPreview();
-          }
-        }
+        this.stopProgress();
+        this.mask(-1);
+        this.onScanResponse(response);
+      }).catch((error) => {
+        this.stopProgress();
+        this.mask(-1);
+        this.onScanError(error, data);
       });
+    },
+
+    onScanResponse(response) {
+      if (response && 'index' in response) {
+        const options = {
+          message: this.$t('scan.message:turn-documents'),
+          onNext: () => {
+            this.scan(response.index + 1);
+          }
+        };
+        if (response.image) {
+          options.message = `${this.$t('scan.message:preview-of-page')} ${response.index}`;
+          options.image = response.image;
+          options.onFinish = () => {
+            this.scan(-1);
+          };
+          options.onRescan = () => {
+            this.scan(response.index);
+          };
+        }
+        this.$refs.batchDialog.open(options);
+      } else {
+        // Finish
+        if (storage.settings.showFilesAfterScan) {
+          this.$router.push('/files');
+        } else {
+          this.readPreview();
+        }
+      }
+    },
+
+    /**
+     * Offers recovery when a scan fails (e.g. a timeout or a scanner which
+     * dropped off the network). Pages already scanned in a manual batch are
+     * kept on the server, so the user can retry the failed page, reload the
+     * device list first, or finish with what they have.
+     * @param {any} error
+     * @param {Object} data - the request which failed
+     */
+    onScanError(error, data) {
+      const index = data.index;
+      const options = {
+        error: true,
+        message: this.$t('scan.message:scan-failed'),
+        detail: errorMessage(error),
+        onRetry: () => {
+          this.scan(index);
+        },
+        onRefreshRetry: () => {
+          this.deviceRefresh().then(() => {
+            // Refreshing rebuilds the request from storage which resets the
+            // batch position, so restore it
+            this.request.batch = data.batch;
+            this.scan(index);
+          });
+        }
+      };
+
+      // A manual batch with pages already scanned can still be completed.
+      // A failure while finishing (index -1) can be retried as is.
+      if (data.batch === 'manual' && index > 1) {
+        options.onFinish = () => {
+          this.scan(-1);
+        };
+      }
+      this.$refs.batchDialog.open(options);
     },
 
     updatePaperSize(value) {
@@ -608,6 +762,39 @@ export default {
 </script>
 
 <style scoped>
+.action-bar-spacer {
+  height: calc(88px + env(safe-area-inset-bottom));
+}
+
+.action-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1004;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 6px;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  background: rgb(var(--v-theme-surface));
+}
+
+.action-tile {
+  min-height: 68px;
+  height: auto !important;
+  margin: 0 !important;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.8rem;
+  line-height: 1.1;
+}
+
+.action-tile :deep(.v-btn__content) {
+  white-space: normal;
+  text-align: center;
+}
+
 #mask {
   position: fixed;
   width: 100%;

@@ -84,4 +84,23 @@ describe('Process', () => {
     await Process.spawn('ls', hugeBuffer);
   });
 
+  it('inactivity timeout kills the process group', async function () {
+    this.timeout(5000);
+    const start = Date.now();
+    await assert.rejects(
+      async () => await Process.spawn('sleep 10 > /dev/null', null, { inactivityTimeout: 300 }),
+      (error) => error.code === 'ETIMEDOUT');
+    assert.ok(Date.now() - start < 3000);
+  });
+
+  it('inactivity timeout resets on output', async function () {
+    this.timeout(5000);
+    const chunks = [];
+    const result = await Process.spawn(
+      'for i in 1 2 3 4; do echo "Progress: $i%" >&2; sleep 0.2; done; echo done',
+      null,
+      { inactivityTimeout: 500, onStderr: (chunk) => chunks.push(chunk) });
+    assert.strictEqual(result.toString(), 'done\n');
+    assert.ok(chunks.join('').includes('Progress: 4%'));
+  });
 });

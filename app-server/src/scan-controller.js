@@ -5,6 +5,7 @@ const CommandBuilder = require('./classes/command-builder');
 const FileInfo = require('./classes/file-info');
 const Process = require('./classes/process');
 const Request = require('./classes/request');
+const ScanProgress = require('./classes/scan-progress');
 const Zip = require('./classes/zip');
 
 const application = require('./application');
@@ -63,7 +64,22 @@ class ScanController {
    */
   async scan() {
     log.info('Scanning');
-    await Process.spawn(scanimageCommand.scan(this.request));
+    ScanProgress.start(this.request.index);
+    try {
+      await Process.spawn(scanimageCommand.scan(this.request), null, scanimageCommand.scanOptions());
+    } catch (error) {
+      // Don't leave a partial page behind: a retry or "finish" must only see
+      // complete pages from earlier passes
+      if (![Constants.BATCH_AUTO, Constants.BATCH_COLLATE_STANDARD, Constants.BATCH_COLLATE_REVERSE].includes(this.request.batch)) {
+        const partial = FileInfo.create(scanimageCommand.filename(this.request.index));
+        if (partial.exists()) {
+          partial.delete();
+        }
+      }
+      throw error;
+    } finally {
+      ScanProgress.finish();
+    }
   }
 
   /**

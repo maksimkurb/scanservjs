@@ -46,7 +46,9 @@
     "btn-cancel": "Cancel",
     "btn-finish": "Finish",
     "btn-rescan": "Rescan page",
-    "btn-next": "Next"
+    "btn-next": "Next",
+    "btn-retry": "Retry",
+    "btn-refresh-retry": "Reload & retry"
   },
 
   "files": {
@@ -173,7 +175,12 @@
     "message:no-devices": "Found no devices",
     "message:deleted-preview": "Deleted preview",
     "message:turn-documents": "Turn documents over",
-    "message:preview-of-page": "Preview of page"
+    "message:preview-of-page": "Preview of page",
+    "btn-refresh": "Devices",
+    "message:scan-failed": "Scan failed",
+    "message:scanning": "Scanning",
+    "message:page": "page",
+    "message:waiting": "Please wait..."
   },
 
   "settings": {

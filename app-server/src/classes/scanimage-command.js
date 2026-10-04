@@ -44,6 +44,15 @@ module.exports = class ScanimageCommand {
   }
 
   /**
+   * @returns {import('child_process').ExecOptions}
+   */
+  devicesOptions() {
+    return this.config.devicesTimeout > 0
+      ? { timeout: this.config.devicesTimeout * 1000, killSignal: 'SIGKILL' }
+      : {};
+  }
+
+  /**
    * @param {string} deviceId
    * @returns {string}
    */
@@ -61,6 +70,17 @@ module.exports = class ScanimageCommand {
   filename(page) {
     const number = `000${page}`.slice(-4);
     return `${this.config.tempDirectory}/${Constants.TEMP_FILESTEM}-0-${number}.tif`;
+  }
+
+  /**
+   * @returns {ProcessOptions}
+   */
+  scanOptions() {
+    const ScanProgress = require('./scan-progress');
+    return {
+      inactivityTimeout: this.config.scanTimeout * 1000,
+      onStderr: (chunk) => ScanProgress.update(chunk)
+    };
   }
 
   /**
@@ -120,6 +140,9 @@ module.exports = class ScanimageCommand {
     }
     if (params.mode === 'Lineart' && params.dynamicLineart === false) {
       cmdBuilder.arg('--disable-dynamic-lineart=yes');
+    }
+    if (this.config.scanProgress) {
+      cmdBuilder.arg('--progress');
     }
     if ([Constants.BATCH_AUTO, Constants.BATCH_COLLATE_STANDARD, Constants.BATCH_COLLATE_REVERSE].includes(request.batch)) {
       const pattern = `${this.config.tempDirectory}/${Constants.TEMP_FILESTEM}-${request.index}-%04d.tif`;
