@@ -433,7 +433,12 @@ Synology NAS:
 
 These may be less stable, but also have upcoming features.
 
-If you want to install the latest master branch (this may contain newer code)
+Images are built automatically only when a release is published. A `master`
+image exists only if the `docker` workflow was run manually (Actions → docker →
+Run workflow) on the `master` branch, so it may lag behind the latest code.
+
+If you want to install the latest master branch build (this may contain newer
+code)
 
 ```sh
 docker pull sbs20/scanservjs:master
