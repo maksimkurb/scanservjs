@@ -2,7 +2,16 @@
   <v-app>
     <transition name="fade">
       <div v-if="maskRef" id="mask">
-        <div style="position: absolute; top: 49%; left: 49%">
+        <v-card v-if="progress" class="scan-progress pa-4" elevation="8">
+          <div class="d-flex justify-space-between text-body-2 mb-2">
+            <span>{{ progressLabel }}</span>
+            <span v-if="progress.active && progress.progress !== null">{{ Math.floor(progress.progress) }}%</span>
+          </div>
+          <v-progress-linear color="primary" height="8" rounded
+            :indeterminate="!progress.active || progress.progress === null"
+            :model-value="progress.progress || 0" />
+        </v-card>
+        <div v-else style="position: absolute; top: 49%; left: 49%">
           <v-progress-circular indeterminate color="primary" />
         </div>
       </div>
@@ -12,7 +21,7 @@
 
     <v-main>
       <v-container fluid>
-        <router-view v-slot="{ Component }" @mask="mask" @notify="notify">
+        <router-view v-slot="{ Component }" @mask="mask" @notify="notify" @progress="onProgress">
           <transition name="fade" mode="out-in" :duration="150">
             <component :is="Component" />
           </transition>
@@ -62,8 +71,20 @@ export default {
   data() {
     return {
       maskRef: 0,
+      progress: null,
       appColor: storage.settings.appColor
     };
+  },
+
+  computed: {
+    progressLabel() {
+      if (!this.progress.active) {
+        return this.$t('scan.message:waiting');
+      }
+      return this.progress.page
+        ? `${this.$t('scan.message:scanning')} (${this.$t('scan.message:page')} ${this.progress.page})`
+        : this.$t('scan.message:scanning');
+    }
   },
 
   beforeMount() {
@@ -89,6 +110,10 @@ export default {
   methods: {
     mask(add) {
       this.maskRef += add;
+    },
+
+    onProgress(progress) {
+      this.progress = progress;
     },
 
     notify(notification) {
@@ -129,6 +154,21 @@ input[type=number] {
 }
 .fade-enter, .fade-leave-to {
   opacity: 0;
+}
+
+.scan-progress {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(360px, calc(100% - 32px));
+}
+
+/* Keep toasts clear of the bottom action bar on small screens */
+@media (max-width: 959px) {
+  .toast-container.toast-bottom-right {
+    bottom: calc(96px + env(safe-area-inset-bottom));
+  }
 }
 
 #mask {

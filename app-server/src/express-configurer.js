@@ -152,6 +152,11 @@ const EndpointSpecs = [
   },
   {
     method: 'get',
+    path: '/api/v1/scan/progress',
+    callback: async (req, res) => res.send(api.readScanProgress())
+  },
+  {
+    method: 'get',
     path: '/api/v1/system',
     callback: async (req, res) => res.send(await api.readSystem())
   }

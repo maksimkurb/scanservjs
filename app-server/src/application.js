@@ -91,7 +91,7 @@ module.exports = new class Application {
       let deviceIds = config.devices;
       this.log().debug({'Config.devices': deviceIds});
       if (config.devicesFind) {
-        const data = await Process.execute(scanimageCommand.devices());
+        const data = await Process.execute(scanimageCommand.devices(), scanimageCommand.devicesOptions());
         this.log().debug({'devices': data});
         const localDevices = new DeviceIdParser(data).ids();
         deviceIds = deviceIds.concat(localDevices);
@@ -101,7 +101,7 @@ module.exports = new class Application {
       devices = [];
       for (let deviceId of deviceIds) {
         try {
-          const data = await Process.execute(scanimageCommand.features(deviceId));
+          const data = await Process.execute(scanimageCommand.features(deviceId), scanimageCommand.devicesOptions());
           this.log().debug(`features: ${data}`);
           devices.push(Device.from(data));
         } catch (error) {

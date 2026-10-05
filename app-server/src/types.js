@@ -9,6 +9,9 @@
  * @property {maxBuffer} [number]
  * @property {ignoreErrors} [boolean]
  * @property {string} [cwd]
+ * @property {number} [inactivityTimeout] - milliseconds without stdout/stderr
+ * output before the process (group) is killed and the promise rejected
+ * @property {function(string):void} [onStderr] - called with each stderr chunk
  */
 
 /**
@@ -63,6 +66,10 @@
  * @property {string} version
  * @property {number} port
  * @property {number} timeout
+ * @property {number} scanTimeout
+ * @property {number} devicesTimeout
+ * @property {boolean} scanProgress
+ * @property {boolean} roundCoordinates
  * @property {string[]} devices
  * @property {boolean} devicesFind
  * @property {string} ocrLanguage
@@ -142,4 +149,12 @@
  * @typedef {Object} Action
  * @property {string} name
  * @property {FnActionExec} execute
+ */
+
+/**
+ * @typedef {Object} ScanProgressState
+ * @property {boolean} active
+ * @property {number|null} progress - percentage of the current page, if known
+ * @property {number|null} page - current page, if known
+ * @property {number|null} startedAt
  */

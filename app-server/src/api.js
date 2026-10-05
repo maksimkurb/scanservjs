@@ -5,6 +5,7 @@ const LogFormatter = require('./classes/log-formatter');
 const Process = require('./classes/process');
 const Request = require('./classes/request');
 const ScanController = require('./scan-controller');
+const ScanProgress = require('./classes/scan-progress');
 
 const application = require('./application');
 const config = application.config();
@@ -78,7 +79,12 @@ module.exports = new class Api {
 
     const cmd = `${scanimageCommand.scan(request)}`;
     log.trace('Executing cmd:', cmd);
-    await Process.spawn(cmd);
+    ScanProgress.start();
+    try {
+      await Process.spawn(cmd, null, scanimageCommand.scanOptions());
+    } finally {
+      ScanProgress.finish();
+    }
     return {};
   }
 
@@ -152,6 +158,13 @@ module.exports = new class Api {
    */
   async scan(req) {
     return await ScanController.run(req);
+  }
+
+  /**
+   * @returns {ScanProgressState}
+   */
+  readScanProgress() {
+    return ScanProgress.read();
   }
 
   /**

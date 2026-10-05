@@ -262,6 +262,23 @@ paths:
               schema:
                 $ref: '#/definitions/ScanResponse'
 
+  /api/v1/scan/progress:
+    get:
+      summary: Gets the progress of the running scan
+      description: |
+        Returns the progress of the scan currently in flight (if any) as
+        reported by `scanimage --progress`. `progress` is a percentage of the
+        current page and is null if the backend does not report it.
+      tags:
+        - Scanner
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/definitions/ScanProgress'
+
   /api/v1/system:
     get:
       summary: Gets host system information
@@ -465,6 +482,25 @@ definitions:
         type: array
         items:
           type: string
+
+      roundCoordinates:
+        type: boolean
+
+  ScanProgress:
+    properties:
+      active:
+        type: boolean
+      progress:
+        type: number
+        nullable: true
+        example: 42.5
+      page:
+        type: integer
+        nullable: true
+        example: 1
+      startedAt:
+        type: integer
+        nullable: true
 
   SystemInfoOs:
     properties:

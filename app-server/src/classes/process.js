@@ -26,11 +26,12 @@ module.exports = new class Process {
 
   /**
    * @param {string} cmd
+   * @param {import('child_process').ExecOptions} [options]
    * @returns {Promise.<string>}
    */
-  async execute(cmd) {
+  async execute(cmd, options) {
     this.log().info({execute: cmd});
-    const { stdout } = await exec(cmd);
+    const { stdout } = await exec(cmd, options);
     return stdout;
   }
 
@@ -64,25 +65,79 @@ module.exports = new class Process {
     return await new Promise((resolve, reject) => {
       let stdout = Buffer.alloc(0);
       let stderr = '';
-      const proc = spawn(cmd, [], options);
+      let timedOut = false;
+      let timer = null;
+      let killTimer = null;
+
+      // With a timeout we run in our own process group so that killing it also
+      // kills children of the shell (e.g. `sh -c 'scanimage ... > file'`)
+      const spawnOptions = Object.assign({}, options);
+      delete spawnOptions.inactivityTimeout;
+      delete spawnOptions.onStderr;
+      delete spawnOptions.ignoreErrors;
+      if (options.inactivityTimeout > 0) {
+        spawnOptions.detached = true;
+      }
+
+      const proc = spawn(cmd, [], spawnOptions);
+
+      const kill = (signal) => {
+        try {
+          process.kill(spawnOptions.detached ? -proc.pid : proc.pid, signal);
+        } catch (e) {
+          this.log().debug(`kill(${signal}) failed: ${e.message}`);
+        }
+      };
+
+      const resetTimer = () => {
+        if (!(options.inactivityTimeout > 0) || timedOut) {
+          return;
+        }
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          timedOut = true;
+          this.log().warn(`No output for ${options.inactivityTimeout}ms, killing: ${cmd}`);
+          kill('SIGTERM');
+          // scanimage may hang trying to cancel a dead device
+          killTimer = setTimeout(() => kill('SIGKILL'), 5000);
+        }, options.inactivityTimeout);
+      };
+      resetTimer();
+
       proc.stdout.on('data', (data) => {
         stdout = Buffer.concat([stdout, data]);
+        resetTimer();
       });
 
       proc.stderr.on('data', (data) => {
         stderr += data;
+        resetTimer();
+        if (options.onStderr) {
+          options.onStderr(data.toString());
+        }
       });
 
       if (!options.ignoreErrors) {
         proc.on('error', (exception) => {
+          clearTimeout(timer);
           reject(new Error(`${cmd} error: ${exception.message}, stderr: ${stderr}`));
         });
       }
 
       proc.on('close', (code) => {
+        clearTimeout(timer);
+        clearTimeout(killTimer);
         this.log().trace(`close(${code}): ${cmd}`);
-        if (code !== 0 && !options.ignoreErrors) {
-          reject(new Error(`${cmd} exited with code: ${code}, stderr: ${stderr}`));
+        if (timedOut) {
+          const error = new Error(`Timed out: no response for ${Math.round(options.inactivityTimeout / 1000)}s`);
+          error.code = 'ETIMEDOUT';
+          reject(error);
+        } else if (code !== 0 && !options.ignoreErrors) {
+          // Progress output is noise in an error message
+          const message = stderr.split(/[\r\n]+/)
+            .filter(line => line.length > 0 && !/^Progress:/.test(line))
+            .join('\n');
+          reject(new Error(`${cmd} exited with code: ${code}, stderr: ${message}`));
         } else {
           resolve(stdout);
         }
